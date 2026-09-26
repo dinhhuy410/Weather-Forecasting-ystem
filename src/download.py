@@ -35,42 +35,20 @@ VARIABLES = [
     "wind_gusts_10m",
     "weather_code",
 ]
-
-
 OUTPUT_DIR = "data/raw"
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
 def download_city(city_name, latitude, longitude):
-
-    output_path = os.path.join(
-        OUTPUT_DIR,
-        f"{city_name}.csv"
-    )
-
+    output_path = os.path.join(OUTPUT_DIR, f"{city_name}.csv")
     # Nếu đã tải rồi thì bỏ qua
     if os.path.exists(output_path):
-
         try:
-            old_df = pd.read_csv(
-                output_path,
-                nrows=1
-            )
-
-            print(
-                f"[SKIP] {city_name} already exists"
-            )
-
+            old_df = pd.read_csv(output_path, nrows=1)
+            print(f"[SKIP] {city_name} already exists")
             return True
-
         except Exception:
-            print(
-                f"[WARNING] {city_name} file exists but cannot be read."
-            )
-
+            print(f"[WARNING] {city_name} file exists but cannot be read.")
     url = "https://archive-api.open-meteo.com/v1/archive"
-
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -82,119 +60,66 @@ def download_city(city_name, latitude, longitude):
     }
 
     max_retries = 5
-
     for attempt in range(1, max_retries + 1):
-
-        print(
-            f"[{city_name}] "
-            f"Attempt {attempt}/{max_retries}"
-        )
-
+        print(f"[{city_name}] " f"Attempt {attempt}/{max_retries}")
         try:
-
             response = requests.get(
                 url,
                 params=params,
                 timeout=180
             )
-
             # Rate limit
             if response.status_code == 429:
-
                 wait_time = 30 * attempt
-
                 print(
                     f"[429] Rate limit. "
                     f"Waiting {wait_time} seconds..."
                 )
-
                 time.sleep(wait_time)
-
                 continue
-
             response.raise_for_status()
-
             data = response.json()
-
             if "hourly" not in data:
-
-                print(
-                    f"[ERROR] No hourly data for {city_name}"
-                )
-
+                print(f"[ERROR] No hourly data for {city_name}")
                 return False
-
-            df = pd.DataFrame(
-                data["hourly"]
-            )
-
+            df = pd.DataFrame(data["hourly"])
             df["city"] = city_name
             df["latitude"] = latitude
             df["longitude"] = longitude
-
-            df.to_csv(
-                output_path,
-                index=False
-            )
-
+            df.to_csv(output_path,index=False)
             print(
                 f"[SUCCESS] {city_name}: "
                 f"{len(df):,} rows saved"
             )
-
             return True
-
         except requests.exceptions.RequestException as e:
-
-            print(
-                f"[ERROR] {city_name}: {e}"
-            )
-
+            print(f"[ERROR] {city_name}: {e}")
             if attempt < max_retries:
-
                 wait_time = 30 * attempt
-
                 print(
                     f"Retrying in "
                     f"{wait_time} seconds..."
                 )
-
                 time.sleep(wait_time)
-
             else:
-
-                print(
-                    f"[FAILED] {city_name}"
-                )
-
+                print(f"[FAILED] {city_name}")
                 return False
-
     return False
-
 
 print("=" * 60)
 print("VIETNAM WEATHER DATA DOWNLOADER")
 print("=" * 60)
 
-
 for city_name, coordinates in CITIES.items():
-
     latitude, longitude = coordinates
-
     success = download_city(
         city_name,
         latitude,
         longitude
     )
-
     # Nghỉ giữa các thành phố
-    print(
-        "\nWaiting 20 seconds before next city...\n"
-    )
-
+    print("\nWaiting 20 seconds before next city...\n")
     time.sleep(20)
-
-
 print("=" * 60)
 print("DOWNLOAD COMPLETED")
 print("=" * 60)
