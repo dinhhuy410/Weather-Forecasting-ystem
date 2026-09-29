@@ -2,98 +2,195 @@ import requests
 import pandas as pd
 import time
 import os
-
-
-CITIES = {
-    "Hanoi": (21.0285, 105.8542),
-    "HaiPhong": (20.8449, 106.6881),
-    "ThanhHoa": (19.8067, 105.7852),
-    "Vinh": (18.6796, 105.6813),
-    "Hue": (16.4637, 107.5909),
-    "DaNang": (16.0544, 108.2022),
-    "NhaTrang": (12.2388, 109.1967),
-    "DaLat": (11.9404, 108.4583),
-    "HoChiMinh": (10.8231, 106.6297),
-    "CanTho": (10.0452, 105.7469),
-}
-
-
-START_DATE = "2015-01-01"
+# ============================================================
+# CONFIGURATION
+# ============================================================
+CITY_NAME = "Hanoi"
+LATITUDE = 21.0285
+LONGITUDE = 105.8542
+START_DATE = "2010-01-01"
 END_DATE = "2025-12-31"
 
+OUTPUT_DIR = "data/raw"
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "Hanoi.csv")
+# Open-Meteo Historical Weather API
+API_URL = "https://archive-api.open-meteo.com/v1/archive"
+# ============================================================
+# WEATHER FEATURES
+# ============================================================
 VARIABLES = [
+    # -------------------------
+    # Atmospheric conditions
+    # -------------------------
     "temperature_2m",
     "relative_humidity_2m",
     "dew_point_2m",
     "apparent_temperature",
+    # -------------------------
+    # Precipitation
+    # -------------------------
     "precipitation",
+    "rain",
+    "snowfall",
+    # -------------------------
+    # Pressure
+    # -------------------------
     "pressure_msl",
     "surface_pressure",
+    # -------------------------
+    # Cloud
+    # -------------------------
     "cloud_cover",
+    "cloud_cover_low",
+    "cloud_cover_mid",
+    "cloud_cover_high",
+    # -------------------------
+    # Wind
+    # -------------------------
     "wind_speed_10m",
+    "wind_speed_100m",
     "wind_direction_10m",
+    "wind_direction_100m",
     "wind_gusts_10m",
+    # -------------------------
+    # Evaporation / humidity
+    # -------------------------
+    "et0_fao_evapotranspiration",
+    "vapour_pressure_deficit",
+    # -------------------------
+    # Soil temperature
+    # -------------------------
+    "soil_temperature_0_to_7cm",
+    "soil_temperature_7_to_28cm",
+    "soil_temperature_28_to_100cm",
+    "soil_temperature_100_to_255cm",
+    # -------------------------
+    # Soil moisture
+    # -------------------------
+    "soil_moisture_0_to_7cm",
+    "soil_moisture_7_to_28cm",
+    "soil_moisture_28_to_100cm",
+    "soil_moisture_100_to_255cm",
+    # ------------------------
+    # Weather condition
+    # -------------------------
     "weather_code",
+    # -------------------------
+    # Day / night
+    # -------------------------
+    "is_day",
 ]
-OUTPUT_DIR = "data/raw"
+# ============================================================
+# CREATE OUTPUT DIRECTORY
+# ============================================================
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+# ============================================================
+# DOWNLOAD FUNCTION
+# ============================================================
+def download_hanoi():
+    print("=" * 70)
+    print("HANOI WEATHER DATA DOWNLOADER")
+    print("=" * 70)
 
-def download_city(city_name, latitude, longitude):
-    output_path = os.path.join(OUTPUT_DIR, f"{city_name}.csv")
-    # Nếu đã tải rồi thì bỏ qua
-    if os.path.exists(output_path):
-        try:
-            old_df = pd.read_csv(output_path, nrows=1)
-            print(f"[SKIP] {city_name} already exists")
-            return True
-        except Exception:
-            print(f"[WARNING] {city_name} file exists but cannot be read.")
-    url = "https://archive-api.open-meteo.com/v1/archive"
+    print(f"City       : {CITY_NAME}")
+    print(f"Latitude   : {LATITUDE}")
+    print(f"Longitude  : {LONGITUDE}")
+    print(f"Start date : {START_DATE}")
+    print(f"End date   : {END_DATE}")
+    print(f"Features   : {len(VARIABLES)}")
+    print(f"Output     : {OUTPUT_FILE}")
+    print("=" * 70)
     params = {
-        "latitude": latitude,
-        "longitude": longitude,
+        "latitude": LATITUDE,
+        "longitude": LONGITUDE,
         "start_date": START_DATE,
         "end_date": END_DATE,
         "hourly": ",".join(VARIABLES),
         "timezone": "Asia/Bangkok",
         "models": "era5",
     }
-
     max_retries = 5
     for attempt in range(1, max_retries + 1):
-        print(f"[{city_name}] " f"Attempt {attempt}/{max_retries}")
+        print(f"\n[DOWNLOAD] Attempt "
+            f"{attempt}/{max_retries}")
         try:
-            response = requests.get(
-                url,
-                params=params,
-                timeout=180
-            )
+            response = requests.get(API_URL, params=params,timeout=300)
+            # ------------------------------------------------
             # Rate limit
+            # ------------------------------------------------
             if response.status_code == 429:
                 wait_time = 30 * attempt
-                print(
-                    f"[429] Rate limit. "
-                    f"Waiting {wait_time} seconds..."
-                )
+                print(f"[429] API rate limit.")
+                print(f"Waiting {wait_time} seconds...")
                 time.sleep(wait_time)
                 continue
+            # ------------------------------------------------
+            # HTTP errors
+            # ------------------------------------------------
             response.raise_for_status()
+            # ------------------------------------------------
+            # Convert JSON
+            # ------------------------------------------------
             data = response.json()
             if "hourly" not in data:
-                print(f"[ERROR] No hourly data for {city_name}")
+                print( "[ERROR] API response does "
+                    "not contain hourly data.")
                 return False
+            # ------------------------------------------------
+            # Create DataFrame
+            # ------------------------------------------------
             df = pd.DataFrame(data["hourly"])
-            df["city"] = city_name
-            df["latitude"] = latitude
-            df["longitude"] = longitude
-            df.to_csv(output_path,index=False)
+            # ------------------------------------------------
+            # Add location information
+            # ------------------------------------------------
+            df["city"] = CITY_NAME
+            df["latitude"] = LATITUDE
+            df["longitude"] = LONGITUDE
+            # ------------------------------------------------
+            # Convert time column
+            # ------------------------------------------------
+            df["time"] = pd.to_datetime(df["time"])
+            # ------------------------------------------------
+            # Sort by time
+            # ------------------------------------------------
+            df = df.sort_values("time").reset_index(drop=True)
+            # ------------------------------------------------
+            # Remove duplicate timestamps
+            # ------------------------------------------------
+            df = df.drop_duplicates(subset=["time"]).reset_index(drop=True)
+            # ------------------------------------------------
+            # Save CSV
+            # ------------------------------------------------
+            df.to_csv(OUTPUT_FILE,index=False)
+            # ------------------------------------------------
+            # Statistics
+            # ------------------------------------------------
+            print("\n[SUCCESS]")
             print(
-                f"[SUCCESS] {city_name}: "
-                f"{len(df):,} rows saved"
+                f"Rows       : {len(df):,}"
             )
+            print(
+                f"Columns    : {len(df.columns)}"
+            )
+            print(
+                f"Start      : {df['time'].min()}"
+            )
+            print(
+                f"End        : {df['time'].max()}"
+            )
+            print(
+                f"File       : {OUTPUT_FILE}"
+            )
+            print("\nColumns:")
+            for column in df.columns:
+                print(
+                    f"  - {column}"
+                )
+            print("=" * 70)
             return True
-        except requests.exceptions.RequestException as e:
-            print(f"[ERROR] {city_name}: {e}")
+        except requests.exceptions.RequestException as error:
+            print(f"[ERROR] Request failed:")
+            print(error)
             if attempt < max_retries:
                 wait_time = 30 * attempt
                 print(
@@ -102,24 +199,19 @@ def download_city(city_name, latitude, longitude):
                 )
                 time.sleep(wait_time)
             else:
-                print(f"[FAILED] {city_name}")
+                print("[FAILED] Maximum retries reached.")
                 return False
+        except Exception as error:
+            print("[ERROR] Unexpected error:")
+            print(error)
+            return False
     return False
-
-print("=" * 60)
-print("VIETNAM WEATHER DATA DOWNLOADER")
-print("=" * 60)
-
-for city_name, coordinates in CITIES.items():
-    latitude, longitude = coordinates
-    success = download_city(
-        city_name,
-        latitude,
-        longitude
-    )
-    # Nghỉ giữa các thành phố
-    print("\nWaiting 20 seconds before next city...\n")
-    time.sleep(20)
-print("=" * 60)
-print("DOWNLOAD COMPLETED")
-print("=" * 60)
+# ============================================================
+# MAIN
+# ============================================================
+if __name__ == "__main__":
+    success = download_hanoi()
+    if success:
+        print("\n[DONE] Hanoi dataset downloaded successfully.")
+    else:
+        print("\n[FAILED] Hanoi dataset download failed.")
