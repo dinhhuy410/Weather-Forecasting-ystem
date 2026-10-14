@@ -1,106 +1,154 @@
-# Weather-Forecasting-ystem
+# Weather Forecasting — Hà Nội
 
-Dự án xây dựng quy trình Data Science cho bài toán dự báo thời tiết Hà Nội từ dữ liệu hourly. Dữ liệu được thu thập từ Open-Meteo, xử lý sạch, phân tích EDA, sau đó huấn luyện nhóm mô hình Machine Learning và Deep Learning.
+Dự báo nhiệt độ một giờ tiếp theo bằng Random Forest, XGBoost, LSTM và GRU trên dữ liệu thời tiết theo giờ của Hà Nội.
 
-## Mục Tiêu
-
-- Thu thập dữ liệu thời tiết Hà Nội theo giờ.
-- Kiểm tra chất lượng dữ liệu: missing values, duplicate timestamps, khoảng thời gian và thống kê mô tả.
-- Tạo đặc trưng thời gian, lag features và rolling statistics cho bài toán dự báo chuỗi thời gian.
-- Huấn luyện và so sánh Random Forest với XGBoost.
-- Huấn luyện và so sánh LSTM với GRU trên dữ liệu dạng chuỗi.
-- Đánh giá mô hình bằng MAE, Median AE, RMSE, R2 và MAPE.
-- Bổ sung TimeSeriesSplit cross-validation, hyperparameter tuning, feature importance và error analysis.
-
-## Cấu Trúc Dự Án
+## Cấu trúc
 
 ```text
-Weather-Forecasting-ystem-main/
-├── README.md
-├── requirements.txt
-├── crawl_data/
-│   ├── download_hanoi.py
-│   └── README.md
-├── src/
-│   ├── download.py
-│   ├── inspect_data.py
-│   └── preprocess.py
-├── data/
-│   ├── README.md
-│   ├── raw/
-│   │   └── Hanoi.csv
-│   └── processed/
-│       ├── Hanoi_clean.csv
-│       └── Hanoi_final.csv
-├── data_processing/
-│   ├── clean_raw.ipynb
-│   ├── prepare_final.ipynb
-│   └── README.md
-├── eda/
-│   ├── data_analyze.ipynb
-│   ├── eda_visualization.ipynb
-│   └── README.md
-└── train_model/
-    ├── ml_models.ipynb
-    ├── dl_models.ipynb
-    └── README.md
+crawl_data/                          # Thu thập ERA5 từ Open-Meteo
+data/raw/Hanoi.csv                  # 2010–2025
+data/raw/test/Hanoi_test_set.csv     # 01/01–29/09/2026
+data/processed/Hanoi_final.csv      # Feature đã tạo, thông tin và nhiệt độ hiện tại
+data/processed/Hanoi_test_final.csv # Schema giống train, có lịch sử qua đầu năm
+src/weather_data.py                # Schema, kiểm tra giờ và feature nhân quả
+src/feature_experiments.py          # CV, drop-column, bootstrap, đánh giá và biểu đồ
+src/inspect_data.py                 # Kiểm tra raw bằng terminal
+data_processing/clean_raw.ipynb
+data_processing/prepare_test_set.ipynb
+data_processing/feature_selection.json
+data_processing/feature_experiment_review.md
+eda/                               # EDA trên raw
+train_model/ml_models.ipynb
+train_model/dl_models.ipynb
+train_model/evaluate_2026_test_set.ipynb
+train_model/artifacts/              # Model, predictions, metrics và biểu đồ
+tests/
 ```
 
-## Dữ Liệu
+## Feature được bổ sung
 
-Dataset raw nằm tại `data/raw/Hanoi.csv`. Dataset sau xử lý được tạo ra trong `data/processed/`.
+| Nhóm | Feature | Cách tạo |
+|---|---|---|
+| Nhiệt độ hiện tại | `temperature_2m` | Giá trị quan sát tại giờ t; nhãn là nhiệt độ t+1. |
+| Chu kỳ giờ | `hour_sin`, `hour_cos` | Sin/cos chu kỳ 24 giờ theo giờ Hà Nội. |
+| Chu kỳ năm | `day_of_year_sin`, `day_of_year_cos` | Sin/cos chu kỳ 365 hoặc 366 ngày, gồm phần giờ trong ngày. |
+| Lịch sử | `temp_lag_1h`, `temp_lag_3h`, `temp_lag_24h` | Nhiệt độ tại t−1, t−3, t−24. |
+| Xu hướng | `temp_delta_1h` | Nhiệt độ tại t trừ t−1. |
+| Trung bình gần nhất | `temp_rolling_mean_3h` | Trung bình t−2, t−1, t; yêu cầu đủ ba quan sát. |
+| Hướng gió | `wind_direction_10m_sin/cos`, `wind_direction_100m_sin/cos` | Chuyển góc độ sang sin/cos; 359° và 1° nằm gần nhau. |
 
-| Thông tin | Giá trị |
-|---|---:|
-| Khu vực | Hà Nội |
-| Tần suất | Theo giờ |
-| Target mặc định | `temperature_2m` |
-| Forecast horizon mặc định | 1 giờ tiếp theo |
-| Số dòng hiện tại | 140,256 |
+Raw đã có `relative_humidity_2m`, `rain`, `wind_speed_10m` cùng các biến khí tượng còn lại; không cần tải thêm. Giữ `apparent_temperature`, ET0, mây, nhiệt độ đất và các nhóm khác để thử nghiệm. Raw luôn giữ các hướng gió gốc; model dùng cặp sin/cos.
 
-## Quy Trình Xử Lý
+Không dùng tương lai để tạo feature. Chỉ forward-fill biến đầu vào tối đa ba giờ; nhiệt độ mục tiêu không được điền hoặc nội suy. Dữ liệu phải liên tục từng giờ, không có timestamp trùng hay giá trị không hữu hạn.
 
-1. **Data Collection**: tải dữ liệu bằng `crawl_data/download_hanoi.py`.
-2. **Data Cleaning**: chạy `data_processing/clean_raw.ipynb` để tạo `Hanoi_clean.csv`.
-3. **Prepare Final Dataset**: chạy `data_processing/prepare_final.ipynb` để tạo `Hanoi_final.csv`.
-4. **EDA Analysis**: chạy `eda/data_analyze.ipynb`.
-5. **EDA Visualization**: chạy `eda/eda_visualization.ipynb`.
-6. **Machine Learning Modeling**: chạy `train_model/ml_models.ipynb`.
-7. **Deep Learning Modeling**: chạy `train_model/dl_models.ipynb`.
+Train bỏ đúng 24 giờ đầu thiếu lịch sử: processed train có 140.232 dòng, bắt đầu 02/01/2010 00:00. Test giữ đủ 6.528 giờ nhờ dùng 24 giờ cuối raw train làm context. Dataset processed giữ hợp của danh sách input ML và DL cộng bốn cột thông tin, vì hai họ model có thể dùng bộ feature khác nhau. Nhãn tương lai được tạo khi chuẩn bị train, không lưu sẵn trong processed.
 
-## Cách Chạy Project
+## Chọn feature và kiểm tra biến trùng lặp
 
-### 1. Cài môi trường Python
+Thử nghiệm so sánh bốn bước trên cùng tập giờ dự báo và cấu hình model:
+
+1. `legacy_weather`: bộ biến khí tượng cũ, input một giờ.
+2. `weather_cyclic_wind`: đổi hướng gió sang sin/cos.
+3. `weather_time`: bổ sung chu kỳ giờ và năm.
+4. `all_augmented`: bổ sung lag, delta và rolling nhiệt độ.
+
+Cả RF/XGBoost đều được fit lại khi bỏ từng cột `vapour_pressure_deficit`, `dew_point_2m`, `is_day`, `soil_temperature_0_to_7cm`, `soil_temperature_7_to_28cm`; có thêm thử nghiệm bỏ cặp nhiệt độ đất và cả nhóm này. Importance từ cây được lưu để diễn giải, không dùng riêng nó để xóa biến. Cột hằng được xác định trên phần phát triển; dùng `cloud_cover` đại diện mây như pipeline trước.
+
+20% thời gian cuối 2010–2025 làm holdout, bắt đầu **20/10/2022 04:00** theo giờ của nhãn. Trên phần phát triển: 5 fold `TimeSeriesSplit`, gap bằng horizon, mỗi fold dùng tối đa bốn năm train gần nhất và toàn bộ validation. Cấu hình so sánh cố định: RF 60 cây/depth 12; XGBoost 200 cây/depth 5. CV này đánh giá input một giờ với lag tường minh; không phải so sánh trực tiếp với lượt ML cửa sổ 24 giờ trước đây.
+
+Quy tắc loại biến được định trước:
+
+- So sánh sai số trên đúng cùng giờ dự báo; bootstrap ghép cặp theo ngày, 2.000 lần.
+- Cận trên một phía của mức tăng MAE **và** RMSE phải trong 1% cho **cả** RF/XGBoost. Hiệu chỉnh Bonferroni cho các thử nghiệm, hai họ model và hai chỉ số.
+- Không có nhóm mùa hoặc giờ tăng MAE/RMSE quá 5% trên dự đoán CV. Đây là kiểm tra nhóm mô tả, tách khỏi confidence bounds tổng thể.
+- Các cột đạt riêng lẻ được thử bỏ chung; chỉ áp dụng bộ gọn nếu thử nghiệm chung cũng đạt. Nếu chưa đủ bằng chứng thì giữ biến.
+
+1% và 5% là mức suy giảm thực dụng cho dự án, không phải định nghĩa phổ quát về ý nghĩa thống kê. Không đồng nhất “không có khác biệt có ý nghĩa” với “đã chứng minh tương đương”. Bootstrap theo ngày chưa mô hình hóa tương quan qua nhiều ngày. CV dùng để phát triển/chọn feature, không phải nested CV.
+
+Bộ feature và model được chốt bằng CV trước khi đánh giá holdout và mở raw 2026. Các bảng holdout/2026 không dùng để chọn lại feature hoặc tham số. Khi đánh giá 2026, model được refit trên toàn bộ 2010–2025; các quan sát test đã có tại thời điểm dự báo được dùng làm lịch sử cho những giờ sau. Đây là dự báo từng giờ, không phải dự báo cả năm từ một mốc duy nhất.
+
+## Kết quả và các file lưu
+
+Lượt thử nghiệm đã chốt **33 feature ML** (`joint_reduced`) và **XGBoost** bằng CV. Bỏ `dew_point_2m`, `vapour_pressure_deficit`, `is_day`, `soil_temperature_7_to_28cm` khỏi input ML sau kiểm tra riêng và bỏ chung; giữ tầng đất 0–7 cm. DL mặc định giữ **32 feature weather + time**. Processed có 41 cột vì vẫn giữ các biến này cho DL.
+
+Trên test 2026, XGBoost đã chốt đạt **MAE 0,3887°C**. Bộ khí tượng cũ dùng input một giờ đạt 0,4596°C trong cùng lượt so sánh; giảm MAE khoảng 15,4%. Đây chưa phải so sánh với model cửa sổ 24 giờ cũ hoặc kết quả LSTM/GRU mới.
+
+Đọc [báo cáo thử nghiệm](data_processing/feature_experiment_review.md) để xem RMSE, kết quả theo mùa/giờ và từng thử nghiệm loại biến.
+
+`data_processing/feature_selection.json` lưu:
+
+- `selected_features`, `active_feature_set`: danh sách ML theo đúng thứ tự input.
+- `dl_selected_features`: bộ weather + time cho chuỗi 24 giờ; giữ các biến khí tượng để đánh giá riêng cho DL.
+- `feature_sets`, `strategy_cv_scores`, `strategy_fold_scores`, `fold_periods`: so sánh các nhóm và biên thời gian mỗi fold.
+- `drop_column_scores`, `joint_drop_scores`: delta sai số, confidence bounds, kiểm tra theo mùa/giờ và quyết định loại.
+- `feature_scores`: importance của RF/XGBoost; không phải quy tắc xóa biến.
+- `feature_engineering`, cấu hình thử nghiệm, mốc holdout và SHA-256 của raw/processed.
+- `holdout_scores`, `external_test_scores`, `evaluation_slices`: kết quả trên các tập đánh giá sau khi chốt.
+
+`train_model/artifacts/feature_experiments/` có các CSV của CV, drop-column và evaluation, dự đoán từng giờ, `metrics_by_season_hour.csv`, hai biểu đồ PNG, và model đã refit để đánh giá 2026. Các mùa được định nghĩa DJF/MAM/JJA/SON; nhóm giờ và mùa dựa trên **thời điểm nhãn** theo giờ Hà Nội. Test 2026 chỉ có tháng 1–2 cho DJF và tháng 9 cho SON; hai mùa này chưa đủ cả ba tháng.
+
+Model được chọn bằng CV của lượt thử nghiệm được lưu thêm trong `train_model/artifacts/ml/best_ml_feature_experiment_*.joblib`, cùng danh sách feature và cấu hình. Notebook đánh giá 2026 có thể đọc model này. Các model cũ được giữ; chúng có thể không khớp schema mới, và notebook sẽ báo lỗi thay vì tự ép schema.
+
+## Cách chạy
+
+Dùng Python 3.12; môi trường dự án ghim các phiên bản trong requirements:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Crawl dữ liệu
+Để tạo lại toàn bộ feature, chạy selection, đánh giá holdout/2026 và lưu kết quả:
 
 ```bash
-python3 crawl_data/download_hanoi.py
+python -m src.feature_experiments
 ```
 
-Nếu đã có sẵn `data/raw/Hanoi.csv` thì có thể bỏ qua bước crawl.
-
-### 3. Kiểm tra dữ liệu raw
+Lệnh này thực hiện đầy đủ bốn ưu tiên. Có thể chạy `data_processing/clean_raw.ipynb` để làm cùng quy trình và xem bảng trong notebook. Nếu chỉ cần tạo lại processed test sau khi đã có selection/train:
 
 ```bash
-python3 src/inspect_data.py
+jupyter nbconvert --to notebook --execute data_processing/prepare_test_set.ipynb --inplace
 ```
 
-### 4. Chạy notebook theo thứ tự
+Các bước tiếp theo:
 
-```text
-data_processing/clean_raw.ipynb
-data_processing/prepare_final.ipynb
-eda/data_analyze.ipynb
-eda/eda_visualization.ipynb
-train_model/ml_models.ipynb
-train_model/dl_models.ipynb
+| File | Công việc |
+|---|---|
+| `eda/data_analyze.ipynb`, `eda/eda_visualization.ipynb` | EDA đọc raw, chạy độc lập. |
+| `train_model/ml_models.ipynb` | CV/tuning RF và XGBoost trên bộ feature mới; chốt model trước test. |
+| `train_model/dl_models.ipynb` | Chuỗi 24 giờ, scaler fit trên train trước validation; train LSTM/GRU. |
+| `train_model/evaluate_2026_test_set.ipynb` | Đọc cấu hình đã chốt, refit ML và đánh giá 2026; tùy chọn DL đã lưu. |
+
+ML mặc định `SEQUENCE_LENGTH = 1` vì lag 1/3/24 giờ, delta và rolling đã được tạo tường minh. Có thể thử lại cửa sổ 24 giờ; khi đó mỗi feature được mở rộng thêm 23 lag và cần đánh giá cấu hình mới bằng CV. Không mặc định coi input 24 giờ và input một giờ là cùng một thử nghiệm.
+
+DL mặc định `DL_FEATURE_SET = "weather_time"`, ưu tiên feature thời gian và giữ nguyên chuỗi 24 giờ, không đưa mọi lag nhiệt độ thủ công vào. Có thể đổi sang `weather_cyclic_wind` hoặc `all_augmented` để so sánh riêng bằng validation với cùng split/seed/kiến trúc. Kết quả loại biến của RF/XGBoost không được áp dụng tự động cho LSTM/GRU. Các chỉ số trong báo cáo feature là kết quả ML; cần chạy notebook DL để có kết quả huấn luyện DL mới.
+
+Để chạy DL:
+
+```bash
+pip install -r requirements-dl.txt
+python -m ipykernel install --user --name weather-dl --display-name weather-dl
 ```
 
-Notebook `ml_models.ipynb` dùng cho Random Forest và XGBoost. Notebook `dl_models.ipynb` dùng cho LSTM và GRU.
+Nếu cần tải lại raw:
+
+```bash
+python crawl_data/crawl_hanoi_enriched_weather.py
+python crawl_data/crawl_test_set.py
+python src/inspect_data.py
+```
+
+Hai script thu thập dùng cùng nguồn ERA5, tọa độ, múi giờ UTC+7 và đơn vị. Chỉ thay CSV khi dữ liệu đầy đủ; lỗi API giữ file cũ. Raw test đã được tải lại từ ERA5 trong lượt trước của dự án; không dùng forecast API để điền nhãn test.
+
+## Kiểm tra và giới hạn
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Kiểm tra bao gồm giá trị lag/delta/rolling, dữ liệu tương lai không làm đổi input quá khứ, năm nhuận và chu kỳ năm, hướng gió 359°/1°, context đầu năm, nhãn đúng horizon, biên train/validation/test, scaler, SHA-256, quyết định loại biến và một lượt pipeline hoàn chỉnh trên dữ liệu nhỏ.
+
+MAE/RMSE theo °C là chỉ số chính; MAPE trên thang °C chỉ để tham khảo. Đây là backtest trên ERA5 tái phân tích, chưa chứng minh chất lượng dự báo realtime. Test 2026 từng được đánh giá trong các lượt trước, nên không còn là tập hoàn toàn chưa ai xem; pipeline mới không dùng nó để chọn feature. Không dùng điểm các tập đánh giá để điều chỉnh lựa chọn sau khi đọc báo cáo.
+
+Phương pháp chu kỳ thời gian và chia dữ liệu tham khảo tài liệu chính thức [scikit-learn về feature thời gian](https://scikit-learn.org/1.7/auto_examples/applications/plot_cyclical_feature_engineering.html), [TimeSeriesSplit](https://scikit-learn.org/1.7/modules/generated/sklearn.model_selection.TimeSeriesSplit.html) và [tránh rò rỉ dữ liệu](https://scikit-learn.org/1.7/common_pitfalls.html#data-leakage).

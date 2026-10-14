@@ -1,9 +1,15 @@
 import pandas as pd
 import os
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+from src.weather_data import validate_hourly_frame
 # ============================================================
 # CONFIGURATION
 # ============================================================
-DATA_FILE = "data/raw/Hanoi.csv"
+DATA_FILE = PROJECT_ROOT / "data/raw/Hanoi.csv"
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
@@ -30,6 +36,9 @@ def inspect_dataset(file_path):
         df = pd.read_csv(file_path)
     except Exception as error:
         print(f"[ERROR] Cannot read CSV file: {error}")
+        return False
+    if df.empty or "time" not in df.columns:
+        print("[ERROR] Empty dataset or missing time column.")
         return False
     # --------------------------------------------------------
     # Basic information
@@ -303,26 +312,17 @@ def inspect_dataset(file_path):
     # --------------------------------------------------------
     # Final status
     # --------------------------------------------------------
-    has_missing = total_missing > 0
-    has_duplicates = duplicate_rows > 0
     print("\nSTATUS:")
-    if not has_missing and not has_duplicates:
-        print(
-            "[OK] Dataset has no missing values "
-            "and no duplicate rows."
-        )
-    elif has_missing:
-        print(
-            "[WARNING] Dataset contains missing values."
-        )
-    elif has_duplicates:
-        print(
-            "[WARNING] Dataset contains duplicate rows."
-        )
+    try:
+        validate_hourly_frame(df)
+    except ValueError as error:
+        print(f"[ERROR] {error}")
+        return False
+    print("[OK] Complete, finite data with unique, continuous hourly timestamps.")
     print_separator()
     return True
 # ============================================================
 # MAIN
 # ============================================================
 if __name__ == "__main__":
-    inspect_dataset(DATA_FILE)
+    raise SystemExit(0 if inspect_dataset(DATA_FILE) else 1)

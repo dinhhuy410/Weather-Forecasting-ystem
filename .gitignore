@@ -219,3 +219,6 @@ __marimo__/
 
 # Model artifacts
 train_model/artifacts/
+
+# macOS metadata
+.DS_Store
