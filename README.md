@@ -2,6 +2,26 @@
 
 Dự báo nhiệt độ một giờ tiếp theo bằng Random Forest, XGBoost, LSTM và GRU trên dữ liệu thời tiết theo giờ của Hà Nội.
 
+## Luồng ML cửa sổ trượt: train đến 2024, validation 2025, test 2026
+
+Dùng [train_model/ml_models.ipynb](train_model/ml_models.ipynb) và chạy các cell từ trên xuống. Đây là file duy nhất trong `train_model`. Có thể thực thi notebook bằng terminal:
+
+```bash
+jupyter nbconvert --to notebook --execute train_model/ml_models.ipynb --inplace
+```
+
+Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell xử lý/train/test. Input mặc định là hai CSV trong `data/processed`, hiện có dữ liệu đầy đủ; hai CSV raw trong bản tải này chỉ là con trỏ Git LFS. Sau khi khôi phục raw thật, có thể đổi `DEVELOPMENT_PATH` và `TEST_PATH` trong cell cấu hình để dùng raw.
+
+- Cửa sổ 24 giờ, bước trượt 1 giờ; dự báo nhiệt độ sau 1 giờ.
+- Chia theo **thời điểm nhãn**: train đến hết 2024, validation trong 2025, test các giờ có trong 2026.
+- So sánh bốn cấu hình Random Forest/XGBoost bằng MAE validation; hòa thì dùng RMSE.
+- Không dùng danh sách feature đã chọn ở lượt thử nghiệm cũ; tạo lại calendar và xác định cột hằng chỉ trên train.
+- Lưu model đã chốt trước khi đọc test. Model đánh giá 2026 vẫn chỉ được fit trên train đến 2024; không refit trên 2025.
+
+Kết quả và model nằm trong thư mục riêng cho mỗi lượt chạy tại `artifacts/ml_sliding_window/`, bên ngoài `train_model`. Xem [hướng dẫn luồng mới](docs/ml_training.md) và kiểm tra bằng `python3.12 -m unittest discover -s tests -v`.
+
+**Các mục thử nghiệm feature bên dưới mô tả luồng cũ với holdout 20% và refit 2010–2025; đó là thử nghiệm riêng, không phải quy trình của notebook ML mới.**
+
 ## Cấu trúc
 
 ```text
@@ -19,9 +39,8 @@ data_processing/feature_selection.json
 data_processing/feature_experiment_review.md
 eda/                               # EDA trên raw
 train_model/ml_models.ipynb
-train_model/dl_models.ipynb
-train_model/evaluate_2026_test_set.ipynb
-train_model/artifacts/              # Model, predictions, metrics và biểu đồ
+docs/ml_training.md                # Hướng dẫn notebook ML
+artifacts/                         # Model, predictions, metrics và biểu đồ
 tests/
 ```
 
@@ -85,9 +104,9 @@ Trên test 2026, XGBoost đã chốt đạt **MAE 0,3887°C**. Bộ khí tượn
 - `feature_engineering`, cấu hình thử nghiệm, mốc holdout và SHA-256 của raw/processed.
 - `holdout_scores`, `external_test_scores`, `evaluation_slices`: kết quả trên các tập đánh giá sau khi chốt.
 
-`train_model/artifacts/feature_experiments/` có các CSV của CV, drop-column và evaluation, dự đoán từng giờ, `metrics_by_season_hour.csv`, hai biểu đồ PNG, và model đã refit để đánh giá 2026. Các mùa được định nghĩa DJF/MAM/JJA/SON; nhóm giờ và mùa dựa trên **thời điểm nhãn** theo giờ Hà Nội. Test 2026 chỉ có tháng 1–2 cho DJF và tháng 9 cho SON; hai mùa này chưa đủ cả ba tháng.
+`artifacts/feature_experiments/` có các CSV của CV, drop-column và evaluation, dự đoán từng giờ, `metrics_by_season_hour.csv`, hai biểu đồ PNG, và model đã refit để đánh giá 2026. Các mùa được định nghĩa DJF/MAM/JJA/SON; nhóm giờ và mùa dựa trên **thời điểm nhãn** theo giờ Hà Nội. Test 2026 chỉ có tháng 1–2 cho DJF và tháng 9 cho SON; hai mùa này chưa đủ cả ba tháng.
 
-Model được chọn bằng CV của lượt thử nghiệm được lưu thêm trong `train_model/artifacts/ml/best_ml_feature_experiment_*.joblib`, cùng danh sách feature và cấu hình. Notebook đánh giá 2026 có thể đọc model này. Các model cũ được giữ; chúng có thể không khớp schema mới, và notebook sẽ báo lỗi thay vì tự ép schema.
+Model được chọn bằng CV của lượt thử nghiệm được lưu thêm trong `artifacts/ml/best_ml_feature_experiment_*.joblib`, cùng danh sách feature và cấu hình. Notebook đánh giá 2026 có thể đọc model này. Các model cũ được giữ; chúng có thể không khớp schema mới, và notebook sẽ báo lỗi thay vì tự ép schema.
 
 ## Cách chạy
 
@@ -116,9 +135,7 @@ Các bước tiếp theo:
 | File | Công việc |
 |---|---|
 | `eda/data_analyze.ipynb`, `eda/eda_visualization.ipynb` | EDA đọc raw, chạy độc lập. |
-| `train_model/ml_models.ipynb` | CV/tuning RF và XGBoost trên bộ feature mới; chốt model trước test. |
-| `train_model/dl_models.ipynb` | Chuỗi 24 giờ, scaler fit trên train trước validation; train LSTM/GRU. |
-| `train_model/evaluate_2026_test_set.ipynb` | Đọc cấu hình đã chốt, refit ML và đánh giá 2026; tùy chọn DL đã lưu. |
+| `train_model/ml_models.ipynb` | Cửa sổ 24 giờ; train đến 2024, chọn RF/XGBoost bằng validation 2025 và test 2026. |
 
 ML mặc định `SEQUENCE_LENGTH = 1` vì lag 1/3/24 giờ, delta và rolling đã được tạo tường minh. Có thể thử lại cửa sổ 24 giờ; khi đó mỗi feature được mở rộng thêm 23 lag và cần đánh giá cấu hình mới bằng CV. Không mặc định coi input 24 giờ và input một giờ là cùng một thử nghiệm.
 

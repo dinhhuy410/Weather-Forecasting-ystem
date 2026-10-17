@@ -272,7 +272,7 @@ def run_feature_experiments(project_root, config=None, progress=print):
     selected = sets[active]
     progress(f"Frozen feature set before holdout/test: {active} ({len(selected)} features)")
 
-    output = root / "train_model/artifacts/feature_experiments"
+    output = root / "artifacts/feature_experiments"
     output.mkdir(parents=True, exist_ok=True)
     cv_results = pd.DataFrame(rows)
     summary = cv_results.groupby(["feature_set", "Model"], as_index=False).agg(
@@ -386,7 +386,7 @@ def run_feature_experiments(project_root, config=None, progress=print):
         "sequence_length": 1, "lags": [], "engineered_lags": [1, 3, 24], "rolling_windows": [3],
         "feature_engineering_version": FEATURE_ENGINEERING_VERSION,
         "data_sha256": report["processed_sha256"], "selection_cv_mae": cv_mae}
-    ml_dir = root / "train_model/artifacts/ml"
+    ml_dir = root / "artifacts/ml"
     ml_dir.mkdir(parents=True, exist_ok=True)
     model_file = ml_dir / f"best_ml_feature_experiment_temperature_2m_{timestamp}.joblib"
     joblib.dump({**common_bundle, "models": dev_models, "model": dev_models[best_model],
@@ -433,15 +433,15 @@ def write_experiment_review(root, report, evaluation):
         "Notebook DL có lựa chọn bộ input để chạy so sánh riêng; bảng trên là kết quả RF/XGBoost.", "",
         "## File kết quả", "",
         "- `feature_selection.json`: bộ chốt, cấu hình, confidence bounds, chi tiết theo mùa/giờ và SHA-256.",
-        "- `../train_model/artifacts/feature_experiments/cv_summary.csv`: so sánh từng nhóm feature bằng CV.",
-        "- `../train_model/artifacts/feature_experiments/drop_column_importance.csv`: kết quả loại cột.",
-        "- `../train_model/artifacts/feature_experiments/metrics_by_season_hour.csv`: MAE/RMSE và số mẫu mỗi mùa/giờ.",
-        "- `../train_model/artifacts/feature_experiments/evaluation_predictions.csv`: dự đoán ghép cặp để kiểm tra lại.",
-        "- `../train_model/artifacts/feature_experiments/selected_models_refit_2026.joblib`: model được refit toàn bộ 2010–2025.",
+        "- `../artifacts/feature_experiments/cv_summary.csv`: so sánh từng nhóm feature bằng CV.",
+        "- `../artifacts/feature_experiments/drop_column_importance.csv`: kết quả loại cột.",
+        "- `../artifacts/feature_experiments/metrics_by_season_hour.csv`: MAE/RMSE và số mẫu mỗi mùa/giờ.",
+        "- `../artifacts/feature_experiments/evaluation_predictions.csv`: dự đoán ghép cặp để kiểm tra lại.",
+        "- `../artifacts/feature_experiments/selected_models_refit_2026.joblib`: model được refit toàn bộ 2010–2025.",
         "", "Test 2026: DJF chỉ có tháng 1–2, SON chỉ có tháng 9; hai mùa này chưa đủ cả ba tháng.",
         "Test 2026 đã được đánh giá trong các lượt trước của dự án, vì vậy không còn là lockbox hoàn toàn mới.",
-        "", "![So sánh feature](../train_model/artifacts/feature_experiments/feature_comparison.png)",
-        "", "![Sai số theo mùa và giờ](../train_model/artifacts/feature_experiments/errors_by_season_hour.png)", ""])
+        "", "![So sánh feature](../artifacts/feature_experiments/feature_comparison.png)",
+        "", "![Sai số theo mùa và giờ](../artifacts/feature_experiments/errors_by_season_hour.png)", ""])
     (root / "data_processing/feature_experiment_review.md").write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -451,7 +451,7 @@ def plot_experiment_results(root, report):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    output = Path(root) / "train_model/artifacts/feature_experiments"
+    output = Path(root) / "artifacts/feature_experiments"
     cv = pd.DataFrame(report["strategy_cv_scores"])
     evaluation = pd.DataFrame(report["holdout_scores"] + report["external_test_scores"])
     names = list(dict.fromkeys(["legacy_weather", "weather_cyclic_wind", "weather_time", "all_augmented",

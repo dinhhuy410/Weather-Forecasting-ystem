@@ -71,15 +71,15 @@ Notebook DL có lựa chọn bộ input để chạy so sánh riêng; bảng tr�
 ## File kết quả
 
 - `feature_selection.json`: bộ chốt, cấu hình, confidence bounds, chi tiết theo mùa/giờ và SHA-256.
-- `../train_model/artifacts/feature_experiments/cv_summary.csv`: so sánh từng nhóm feature bằng CV.
-- `../train_model/artifacts/feature_experiments/drop_column_importance.csv`: kết quả loại cột.
-- `../train_model/artifacts/feature_experiments/metrics_by_season_hour.csv`: MAE/RMSE và số mẫu mỗi mùa/giờ.
-- `../train_model/artifacts/feature_experiments/evaluation_predictions.csv`: dự đoán ghép cặp để kiểm tra lại.
-- `../train_model/artifacts/feature_experiments/selected_models_refit_2026.joblib`: model được refit toàn bộ 2010–2025.
+- `../artifacts/feature_experiments/cv_summary.csv`: so sánh từng nhóm feature bằng CV.
+- `../artifacts/feature_experiments/drop_column_importance.csv`: kết quả loại cột.
+- `../artifacts/feature_experiments/metrics_by_season_hour.csv`: MAE/RMSE và số mẫu mỗi mùa/giờ.
+- `../artifacts/feature_experiments/evaluation_predictions.csv`: dự đoán ghép cặp để kiểm tra lại.
+- `../artifacts/feature_experiments/selected_models_refit_2026.joblib`: model được refit toàn bộ 2010–2025.
 
 Test 2026: DJF chỉ có tháng 1–2, SON chỉ có tháng 9; hai mùa này chưa đủ cả ba tháng.
 Test 2026 đã được đánh giá trong các lượt trước của dự án, vì vậy không còn là lockbox hoàn toàn mới.
 
-![So sánh feature](../train_model/artifacts/feature_experiments/feature_comparison.png)
+![So sánh feature](../artifacts/feature_experiments/feature_comparison.png)
 
-![Sai số theo mùa và giờ](../train_model/artifacts/feature_experiments/errors_by_season_hour.png)
+![Sai số theo mùa và giờ](../artifacts/feature_experiments/errors_by_season_hour.png)
