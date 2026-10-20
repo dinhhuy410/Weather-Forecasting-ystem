@@ -2,7 +2,7 @@
 
 Mở [ml_models.ipynb](../train_model/ml_models.ipynb) và chạy từ trên xuống. Đây là file duy nhất trong `train_model`; toàn bộ luồng xử lý và các lời gọi `RandomForestRegressor`, `XGBRegressor`, `.fit()`, `.predict()` nằm trong notebook.
 
-Cell đầu chỉ import thư viện. Các cell sau lần lượt cấu hình → đọc dữ liệu → chọn feature bằng train → tạo cửa sổ → chia tập → baseline → khởi tạo/train RF → khởi tạo/train XGBoost → chọn/lưu model → đọc test → dự đoán/đánh giá → biểu đồ. Sửa tham số model ngay trước cell train tương ứng.
+Cell đầu chỉ import thư viện. Các cell sau lần lượt cấu hình → đọc dữ liệu → khai báo feature → tạo cửa sổ và chia tập → baseline → khởi tạo/train RF → khởi tạo/train XGBoost → chọn model → đọc test → dự đoán/đánh giá → biểu đồ. Sửa tham số model ngay trước cell train tương ứng.
 
 Cần các thư viện trong `requirements.txt`, môi trường Python 3.12. Có thể thực thi notebook từ thư mục gốc bằng:
 
@@ -12,25 +12,29 @@ jupyter nbconvert --to notebook --execute train_model/ml_models.ipynb --inplace
 
 ## Chia tập và chống rò rỉ
 
-`temperature_2m` là mục tiêu, đơn vị °C. Với giờ dự báo t, input gồm các biến thời tiết từ t−23 đến t, nhãn là nhiệt độ t+1. Bước trượt bằng 1. Input được trải phẳng để dùng với Random Forest và XGBoost.
+`temperature_2m` là mục tiêu, đơn vị °C. Với giờ dự báo t, input gồm các biến thời tiết từ t−23 đến t, nhãn là nhiệt độ t+1. Bước trượt bằng 1. Các cell tạo dữ liệu phát triển và test gọi trực tiếp `sliding_window_view()` của NumPy. Phần code còn lại ghép nhãn theo horizon, giữ thông tin thời gian để chia tập và trải phẳng input cho Random Forest/XGBoost.
+
+Mục 5 tách riêng từng bước tạo cửa sổ, đổi chiều, trải phẳng thành `X` và lấy `y = temperature[WINDOW_HOURS:]` cho horizon 1 giờ. Sau đó gọi ngay `train_test_split(..., shuffle=False)` trong cùng cell để có `X_train`, `X_valid`, `y_train`, `y_valid`, theo mốc thời gian của nhãn. Mục tiếp theo tính baseline.
 
 | Tập | Giờ của nhãn | Cách dùng |
 |---|---|---|
-| Train | Trước 01/01/2025 | Fit các model; xác định cột hằng |
-| Validation | Năm 2025 | Chọn MAE nhỏ nhất, hòa thì RMSE nhỏ nhất |
-| Test | Từ 01/01/2026 đến hết dữ liệu 2026 trong CSV | Đánh giá model đã chốt và baseline persistence |
+| Train | Trước 01/01/2025 | Fit các model |
+| Validation | Năm 2025 | Chọn riêng một RF và một XGBoost: MAE nhỏ nhất, hòa thì RMSE nhỏ nhất |
+| Test | Từ 01/01/2026 đến hết dữ liệu 2026 trong CSV | Đánh giá đúng hai model đã chọn và baseline persistence |
 
-Model không được fit lại trên 2025. Trong notebook, test chỉ được mở ở mục 12, sau khi mục 11 đã lưu model và `selection.json`. Các cửa sổ đầu validation/test giữ lịch sử cuối tập trước. Các giờ test đã quan sát được có thể vào cửa sổ của lần dự báo tiếp theo; không cập nhật model. Đây là đánh giá dự báo từng giờ, không phải dự báo cả năm từ ngày 01/01.
+Hai model không được fit lại trên 2025. Test chỉ được mở ở mục 10, sau khi mục 9 đã chọn một RF và một XGBoost trong `selected_models`. Các cửa sổ đầu validation/test giữ lịch sử cuối tập trước. Các giờ test đã quan sát được có thể vào cửa sổ của lần dự báo tiếp theo; không cập nhật model. Đây là đánh giá dự báo từng giờ, không phải dự báo cả năm từ ngày 01/01.
 
-Nếu đổi horizon H>1, code loại các nhãn train/validation sát biên chưa có tại thời điểm dự báo đầu tập sau. Mọi nhãn dùng fit/chọn model phải có thời điểm ≤ mốc dự báo đầu tập sau. Các cửa sổ vẫn có thể chia sẻ quan sát quá khứ.
+Luồng chia tập hiện tại dùng `HORIZON_HOURS = 1`, dự báo sau 1 giờ; không có bước cắt lại train/validation sau `train_test_split`.
 
-Danh sách biến thời tiết hiện tại được định nghĩa trong code, không đọc `data_processing/feature_selection.json`. Calendar được tạo lại; không dùng cột lag/rolling hoặc nhãn tương lai trong CSV cũ. Cột hằng chỉ được xác định bằng dữ liệu đã có trước validation. Không scale. Chỉ forward-fill predictor tối đa 3 giờ; không điền nhiệt độ, backward-fill hay nội suy từ tương lai. Giờ thiếu/trùng hoặc giá trị không hữu hạn gây lỗi.
+Danh sách biến thời tiết hiện tại được định nghĩa trong code, không đọc `data_processing/feature_selection.json`. Dùng trực tiếp `INPUT_FEATURES`, gồm các biến thời tiết và sin/cos thời gian có sẵn trong CSV processed; không dùng cột lag/rolling hoặc nhãn tương lai trong CSV cũ. Không scale hoặc điền thiếu trong notebook; bước tạo cửa sổ dùng trực tiếp CSV processed đã làm sạch.
 
-Input mặc định là `data/processed/Hanoi_final.csv` và `data/processed/Hanoi_test_final.csv`. Processed bắt đầu từ 02/01/2010 vì bước tiền xử lý cũ bỏ 24 giờ đầu. Pipeline tiếp tục bỏ số giờ khởi động cần cho cửa sổ. Raw hiện là con trỏ Git LFS. Khi đã có CSV raw thật, đổi `DEVELOPMENT_PATH` và `TEST_PATH` ở cell cấu hình sang hai đường dẫn raw.
+Input mặc định là `data/processed/Hanoi_final.csv` và `data/processed/Hanoi_test_final.csv`. Processed bắt đầu từ 02/01/2010 vì bước tiền xử lý cũ bỏ 24 giờ đầu. Pipeline tiếp tục bỏ số giờ khởi động cần cho cửa sổ. Raw hiện là con trỏ Git LFS. Khi đã có CSV raw thật, đổi `DATA_PATH` và `TEST_DATA_PATH` ở cell cấu hình sang hai đường dẫn raw.
 
 ## Chạy riêng hai bước
 
-Chạy đến hết mục 11 để train, chọn và lưu model mà chưa đọc test. Chạy tiếp mục 12–14 để mở test 2026, dự đoán và vẽ biểu đồ. Chạy các cell theo thứ tự trong cùng kernel.
+Chạy đến hết mục 9 để train và chọn model mà chưa đọc test. Chạy tiếp mục 10–12 để mở test 2026, dự đoán và vẽ biểu đồ. Chạy các cell theo thứ tự trong cùng kernel; hai model được dùng trực tiếp từ `selected_models`.
+
+Mục 10 ghép `data.tail(WINDOW_HOURS)` vào trước test để tạo `X_test`, `y_test`. Mục 11 chỉ test một RF và một XGBoost đã chọn từ validation, thêm persistence để đối chiếu, rồi lưu CSV. Thống kê theo tháng và biểu đồ so sánh cả hai model được tính ở mục 12.
 
 Kết quả nằm tại `artifacts/ml_sliding_window/` ở thư mục gốc dự án. Hướng dẫn nằm trong `docs/`; `train_model/` chỉ chứa notebook.
 
@@ -38,18 +42,16 @@ Mỗi lần train tạo thư mục mới, giữ nguyên các kết quả trướ
 
 | File | Nội dung |
 |---|---|
-| `best_model.joblib` | Model đã fit trên <=2024, cấu hình và schema input |
-| `selection.json` | Lựa chọn bằng 2025, hash dữ liệu/model và phiên bản thư viện |
-| `history_context.csv` | Lịch sử cuối 2025 để dự báo từ giờ đầu 2026 |
-| `data_splits.csv` | Số mẫu và biên thời gian train/validation |
 | `validation_metrics.csv`, `validation_predictions.csv` | So sánh các cấu hình trên 2025 |
 | `test_metrics.csv`, `test_metrics_by_month.csv` | MAE, RMSE và R² test |
-| `test_predictions.csv`, `evaluation.json` | Dự đoán từng giờ, biên test và hash test |
+| `test_predictions.csv` | Mốc thời gian, nhiệt độ thực tế, dự báo RF, XGBoost và persistence |
 | `test_2026.png` | Đồ thị do notebook tạo |
 
 Baseline persistence dự báo nhiệt độ tương lai bằng nhiệt độ hiện tại. MAE và RMSE tính theo °C. Không dùng điểm test để chọn lại cấu hình sau khi đọc kết quả.
 
 ## Kết quả lượt chạy 17/10/2026
+
+Lượt chạy cũ dưới đây chọn một model tốt nhất chung. Notebook hiện chọn riêng một RF và một XGBoost; kết quả đầy đủ của luồng mới cần chạy lại từ mục 9 trở đi trong kernel còn giữ các model đã train, hoặc chạy lại toàn notebook.
 
 Notebook đã chạy đầy đủ với cửa sổ 24 giờ, horizon 1 giờ và seed 42. Có 131.448 mẫu train, 8.760 mẫu validation và 6.528 mẫu test. Nhãn test từ 01/01/2026 00:00 đến 29/09/2026 23:00 theo giờ Hà Nội.
 
@@ -66,12 +68,6 @@ Notebook đã chạy đầy đủ với cửa sổ 24 giờ, horizon 1 giờ và
 | Persistence | 0,5841 | 0,9396 | 0,9692 |
 
 Model giảm MAE khoảng 35,8% so với persistence trên cùng giờ test. Toàn bộ model, dự đoán và biểu đồ của lượt notebook gọi thư viện trực tiếp nằm trong [thư mục kết quả](../artifacts/ml_sliding_window/20261017_223841_notebook_5p5kcsof/). Cả 20 code cell đã chạy thành công; notebook có sẵn bảng và biểu đồ.
-
-```bash
-python3.12 -m unittest discover -s tests -v
-```
-
-Kiểm tra gồm giá trị cửa sổ, tương lai không thay đổi input quá khứ, split theo năm nhãn, horizon dài, cột hằng chỉ dựa trên train, causal fill, năm nhuận, lịch sử qua đầu năm và pipeline nhỏ chạy cả RF/XGBoost. Kiểm tra pipeline xác nhận chỉ fit trên train, chưa đọc test khi chọn model và không refit sau đó.
 
 Test 2026 đã được xem ở các thử nghiệm cũ; không thể xem đây là tập hoàn toàn chưa từng được sử dụng. Dữ liệu ERA5 là tái phân tích: chất lượng trên backtest này không tự chứng minh chất lượng realtime.
 

@@ -10,7 +10,7 @@ Dùng [train_model/ml_models.ipynb](train_model/ml_models.ipynb) và chạy các
 jupyter nbconvert --to notebook --execute train_model/ml_models.ipynb --inplace
 ```
 
-Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell xử lý/train/test. Input mặc định là hai CSV trong `data/processed`, hiện có dữ liệu đầy đủ; hai CSV raw trong bản tải này chỉ là con trỏ Git LFS. Sau khi khôi phục raw thật, có thể đổi `DEVELOPMENT_PATH` và `TEST_PATH` trong cell cấu hình để dùng raw.
+Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell xử lý/train/test. Input mặc định là hai CSV trong `data/processed`, hiện có dữ liệu đầy đủ; hai CSV raw trong bản tải này chỉ là con trỏ Git LFS. Sau khi khôi phục raw thật, có thể đổi `DATA_PATH` và `TEST_DATA_PATH` trong cell cấu hình để dùng raw.
 
 - Cửa sổ 24 giờ, bước trượt 1 giờ; dự báo nhiệt độ sau 1 giờ.
 - Chia theo **thời điểm nhãn**: train đến hết 2024, validation trong 2025, test các giờ có trong 2026.
@@ -18,7 +18,7 @@ Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell x�
 - Không dùng danh sách feature đã chọn ở lượt thử nghiệm cũ; tạo lại calendar và xác định cột hằng chỉ trên train.
 - Lưu model đã chốt trước khi đọc test. Model đánh giá 2026 vẫn chỉ được fit trên train đến 2024; không refit trên 2025.
 
-Kết quả và model nằm trong thư mục riêng cho mỗi lượt chạy tại `artifacts/ml_sliding_window/`, bên ngoài `train_model`. Xem [hướng dẫn luồng mới](docs/ml_training.md) và kiểm tra bằng `python3.12 -m unittest discover -s tests -v`.
+Kết quả CSV và biểu đồ nằm trong thư mục riêng cho mỗi lượt chạy tại `artifacts/ml_sliding_window/`. Hai model được giữ trong `selected_models` để test trực tiếp trong cùng kernel. Xem [hướng dẫn luồng mới](docs/ml_training.md).
 
 **Các mục thử nghiệm feature bên dưới mô tả luồng cũ với holdout 20% và refit 2010–2025; đó là thử nghiệm riêng, không phải quy trình của notebook ML mới.**
 
@@ -60,7 +60,7 @@ Raw đã có `relative_humidity_2m`, `rain`, `wind_speed_10m` cùng các biến 
 
 Không dùng tương lai để tạo feature. Chỉ forward-fill biến đầu vào tối đa ba giờ; nhiệt độ mục tiêu không được điền hoặc nội suy. Dữ liệu phải liên tục từng giờ, không có timestamp trùng hay giá trị không hữu hạn.
 
-Train bỏ đúng 24 giờ đầu thiếu lịch sử: processed train có 140.232 dòng, bắt đầu 02/01/2010 00:00. Test giữ đủ 6.528 giờ nhờ dùng 24 giờ cuối raw train làm context. Dataset processed giữ hợp của danh sách input ML và DL cộng bốn cột thông tin, vì hai họ model có thể dùng bộ feature khác nhau. Nhãn tương lai được tạo khi chuẩn bị train, không lưu sẵn trong processed.
+Train bỏ đúng 24 giờ đầu thiếu lịch sử: processed train có 140.232 dòng, bắt đầu 02/01/2010 00:00. Test giữ đủ 6.528 giờ nhờ dùng 24 giờ cuối raw train làm history_data. Dataset processed giữ hợp của danh sách input ML và DL cộng bốn cột thông tin, vì hai họ model có thể dùng bộ feature khác nhau. Nhãn tương lai được tạo khi chuẩn bị train, không lưu sẵn trong processed.
 
 ## Chọn feature và kiểm tra biến trùng lặp
 
@@ -164,7 +164,7 @@ Hai script thu thập dùng cùng nguồn ERA5, tọa độ, múi giờ UTC+7 v�
 python -m unittest discover -s tests -v
 ```
 
-Kiểm tra bao gồm giá trị lag/delta/rolling, dữ liệu tương lai không làm đổi input quá khứ, năm nhuận và chu kỳ năm, hướng gió 359°/1°, context đầu năm, nhãn đúng horizon, biên train/validation/test, scaler, SHA-256, quyết định loại biến và một lượt pipeline hoàn chỉnh trên dữ liệu nhỏ.
+Kiểm tra bao gồm giá trị lag/delta/rolling, dữ liệu tương lai không làm đổi input quá khứ, năm nhuận và chu kỳ năm, hướng gió 359°/1°, history_data đầu năm, nhãn đúng horizon, biên train/validation/test, scaler, SHA-256, quyết định loại biến và một lượt pipeline hoàn chỉnh trên dữ liệu nhỏ.
 
 MAE/RMSE theo °C là chỉ số chính; MAPE trên thang °C chỉ để tham khảo. Đây là backtest trên ERA5 tái phân tích, chưa chứng minh chất lượng dự báo realtime. Test 2026 từng được đánh giá trong các lượt trước, nên không còn là tập hoàn toàn chưa ai xem; pipeline mới không dùng nó để chọn feature. Không dùng điểm các tập đánh giá để điều chỉnh lựa chọn sau khi đọc báo cáo.
 
