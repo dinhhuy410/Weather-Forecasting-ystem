@@ -10,15 +10,19 @@ Dùng [train_model/ml_models.ipynb](train_model/ml_models.ipynb) và chạy các
 jupyter nbconvert --to notebook --execute train_model/ml_models.ipynb --inplace
 ```
 
-Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell xử lý/train/test. Input mặc định là hai CSV trong `data/processed`, hiện có dữ liệu đầy đủ; hai CSV raw trong bản tải này chỉ là con trỏ Git LFS. Sau khi khôi phục raw thật, có thể đổi `DATA_PATH` và `TEST_DATA_PATH` trong cell cấu hình để dùng raw.
+Notebook gọi trực tiếp các thư viện và chứa toàn bộ các cell xử lý/train/test. Input là hai CSV trong `data/processed`, hiện có dữ liệu đầy đủ; hai CSV raw trong bản tải này chỉ là con trỏ Git LFS. Nếu khôi phục raw thật, cần chạy tiền xử lý để tạo các cột sin/cos và CSV processed trước khi dùng notebook; chỉ đổi đường dẫn sang raw sẽ thiếu feature đầu vào.
 
 - Cửa sổ 24 giờ, bước trượt 1 giờ; dự báo nhiệt độ sau 1 giờ.
 - Chia theo **thời điểm nhãn**: train đến hết 2024, validation trong 2025, test các giờ có trong 2026.
-- So sánh bốn cấu hình Random Forest/XGBoost bằng MAE validation; hòa thì dùng RMSE.
-- Không dùng danh sách feature đã chọn ở lượt thử nghiệm cũ; tạo lại calendar và xác định cột hằng chỉ trên train.
-- Lưu model đã chốt trước khi đọc test. Model đánh giá 2026 vẫn chỉ được fit trên train đến 2024; không refit trên 2025.
+- Thử 6 cấu hình: RF với độ sâu 12/16/20 và 300 cây; XGBoost với độ sâu 6/8/10, 600 cây và learning rate 0,03. Chọn riêng một model mỗi loại theo MAE validation, hòa thì dùng RMSE.
+- Dùng 32 feature thời tiết và sin/cos thời gian có sẵn trong CSV processed.
+- Giữ hai model đã chọn trong bộ nhớ trước khi đọc test. Model đánh giá 2026 vẫn chỉ được fit trên train đến 2024; không refit trên 2025.
 
 Kết quả CSV và biểu đồ nằm trong thư mục riêng cho mỗi lượt chạy tại `artifacts/ml_sliding_window/`. Hai model được giữ trong `selected_models` để test trực tiếp trong cùng kernel. Xem [hướng dẫn luồng mới](docs/ml_training.md).
+
+Grid gọn đã chạy mới đầy đủ 6 cấu hình và toàn bộ notebook. RF tốt nhất là sâu 20/300 cây (MAE validation 0,3954°C; MAE test 0,4581°C); XGBoost tốt nhất là sâu 8/600 cây/learning rate 0,03 (MAE validation 0,2675°C; MAE test 0,3690°C). Xem [báo cáo lượt chạy đầy đủ](artifacts/ml_sliding_window/run_qhsreslc/run_report.md). Điểm test RF sâu 16 dưới đây thuộc lượt chạy lịch sử.
+
+Lượt chốt 22/10/2026 dừng theo yêu cầu sau 82 cấu hình hoàn tất. RF sâu 16/300 cây đạt MAE test 0,4639°C; XGBoost sâu 8/600 cây/learning rate 0,03 đạt 0,3690°C. Xem [báo cáo hai model đã chọn](artifacts/ml_sliding_window/run_x2dflq_j/selected_models_report.md).
 
 **Các mục thử nghiệm feature bên dưới mô tả luồng cũ với holdout 20% và refit 2010–2025; đó là thử nghiệm riêng, không phải quy trình của notebook ML mới.**
 
